@@ -22,7 +22,6 @@ class Model(tf.keras.Model):
         self.dense_layer1 = tf.keras.layers.Dense(24, activation='relu')
         self.dense_layer2 = tf.keras.layers.Dense(24, activation='relu')
         self.output_layer = tf.keras.layers.Dense(2, activation='linear', name='result')
-        self.optimize = tf.compat.v1.train.AdamOptimizer(1e-4)
 
     def call(self, x):
         x = self.input_layer(x)
