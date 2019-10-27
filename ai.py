@@ -85,7 +85,8 @@ class DQN:
         self.memory = Memory(BATCH_SIZE, MEMORY_MAX)  # Mémoire des actions de l'agent
         self.reward = 0
         self.state = np.array([[0.0, 0.0, 0.0, 0.0]])  # Etat actuelle
-        self.next_state = np.array([[0.0, 0.0, 0.0, 0.0]]) # Etat suivant
+        self.next_state = np.array([[0.0, 0.0, 0.0, 0.0]])  # Etat suivant
+        self.metrics_loss = tf.metrics.MeanSquaredError()
 
     def train(self):
         batch_states, batch_next_states, batch_actions, batch_reward = self.memory.get_sample()  # On récupère notre lot de données
@@ -98,11 +99,13 @@ class DQN:
             predictions = tf.reduce_max(self.model(batch_states))  # Q(s, a, 0)
             loss = tf.keras.losses.MSE(q_targets, predictions)  # Calcul de l'erreur
 
-            grads = tape.gradient(loss, self.model.trainable_variables)  # Calcul du gradient
-            self.optimizer.apply_gradients(zip(grads, self.model.trainable_variables))  # On applique le gradient à notre modèle
+        grads = tape.gradient(loss, self.model.trainable_variables)  # Calcul du gradient
+        self.optimizer.apply_gradients(zip(grads, self.model.trainable_variables))  # On applique le gradient à notre modèle
+
+        self.metrics_loss(q_targets, predictions)
 
         print('------------------------------------------')
-        print("l'erreur est de %s" % tf.reduce_mean(loss))  # On affiche la moyenne des erreurs non cumulées
+        print("la moyenne des erreurs est de %s" % self.metrics_loss.result())  # On affiche la moyenne des erreurs non cumulées
         print("le reward est de %s" % self.memory.last_reward())  # On affiche le dernier rewarc
         print('------------------------------------------')
 
