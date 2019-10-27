@@ -88,8 +88,8 @@ class DQN:
         self.next_state = np.array([[0.0, 0.0, 0.0, 0.0]])  # Etat suivant
         self.metrics_loss = tf.metrics.MeanSquaredError()
 
-    def train(self):
-        batch_states, batch_next_states, batch_actions, batch_reward = self.memory.get_sample()  # On récupère notre lot de données
+    @tf.function
+    def train(self, batch_states, batch_next_states, batch_actions, batch_reward):
 
         next_action_max = tf.reduce_max(self.model(batch_next_states))  # Q(s', a', 0)
         q_targets = tf.add(batch_reward, tf.scalar_mul(GAMMA, next_action_max))  # Calcul de la target, r + GAMMA * Q(s', a', 0)*
@@ -104,11 +104,6 @@ class DQN:
 
         self.metrics_loss(q_targets, predictions)
 
-        print('------------------------------------------')
-        print("la moyenne des erreurs est de %s" % self.metrics_loss.result())  # On affiche la moyenne des erreurs non cumulées
-        print("le reward est de %s" % self.memory.last_reward())  # On affiche le dernier rewarc
-        print('------------------------------------------')
-
     def select_action(self, signals, reward):
         self.state = self.next_state  # On récupère l'état actuelle
         self.next_state = np.array([signals])  # On récupère le nouvelle état
@@ -117,6 +112,11 @@ class DQN:
         self.memory.add(self.state, self.next_state, action, reward)  # On ajoute une transition à la mémoire
 
         if self.memory.is_enough_data():  # On entraine notre modèle si il y a assez de données
-            self.train()
+            batch_states, batch_next_states, batch_actions, batch_reward = self.memory.get_sample()  # On récupère notre lot de données
+            self.train(batch_states, batch_next_states, batch_actions, batch_reward)
+            print('------------------------------------------')
+            print("la moyenne des erreurs est de %s" % self.metrics_loss.result())  # On affiche la moyenne des erreurs non cumulées
+            print("le reward est de %s" % self.memory.last_reward())  # On affiche le dernier rewarc
+            print('------------------------------------------')
 
         return action
