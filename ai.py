@@ -7,6 +7,7 @@ from random import random, randrange, sample
 # tf.debugging.set_log_device_placement(True)
 tf.keras.backend.set_floatx('float64')
 EPISLON = 0.01
+EPISLON_DECAY = 0.95
 GAMMA = 0.95
 LR = 0.005
 INPUT_SIZE = 4
@@ -32,9 +33,11 @@ class Model(tf.keras.Model):
         return self.output_layer(x)
 
     def pick_action(self, state, eps):
+        global EPISLON
         if random() < eps:  # On ne suit pas la policy et donc on choisit une action aléatoire
             print('ALéatoire')
             action = randrange(OUTPUT_SIZE)  # On choisit une action aléatoire
+            EPISLON = EPISLON * EPISLON_DECAY
             return action
         else:
             action = self.predict(state)  # On passe le state dans le réseau de neuronne
@@ -60,7 +63,7 @@ class Memory:
 
         for i1 in range(1):  # Boucle de suppression d'une dimension inutile
             for i2 in range(len(batch[i1]) - 1):
-                np.squeeze(batch[i1][i2], axis=0) # Suppresion de la dimension, données sous la forme
+                np.squeeze(batch[i1][i2], axis=0)  # Suppresion de la dimension, données sous la forme
 
         batch[0] = tf.convert_to_tensor(batch[0], dtype=tf.float64)  # on transforme en tensor
         batch[1] = tf.convert_to_tensor(batch[1], dtype=tf.float64)  # voir au dessus
@@ -92,12 +95,12 @@ class DQN:
     @tf.function
     def train(self, batch_states, batch_next_states, batch_actions, batch_reward, batch_done):
 
-        next_action_max = tf.reduce_max(self.model(batch_next_states))  # Q(s', a', 0)
+        next_action_max = tf.reduce_max(self.model(batch_next_states)) * (1 - batch_done) # Q(s', a', 0)
         q_targets = tf.add(batch_reward, tf.scalar_mul(GAMMA, next_action_max))  # Calcul de la target, r + GAMMA * Q(s', a', 0)*
         # pdb.set_trace()
 
         with tf.GradientTape() as tape:  # On prépare le calcul du gradient
-            predictions = tf.reduce_max(self.model(batch_states)) * (1 - batch_done) # Q(s, a, 0)
+            predictions = tf.reduce_max(self.model(batch_states))  # Q(s, a, 0)
             loss = tf.keras.losses.MSE(q_targets, predictions)  # Calcul de l'erreur
 
         grads = tape.gradient(loss, self.model.trainable_variables)  # Calcul du gradient
