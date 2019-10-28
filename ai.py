@@ -96,15 +96,15 @@ class DQN:
     # @tf.function
     def train(self, batch_states, batch_next_states, batch_actions, batch_reward, batch_done):
 
-        next_action_max = tf.reduce_max(self.model(batch_next_states)) * (1 - batch_done) # Q(s', a', 0)
+        next_action_max = tf.reduce_max(self.model(batch_next_states)) * (1 - batch_done)  # Q(s', a', 0)
         q_targets = tf.add(batch_reward, tf.scalar_mul(GAMMA, next_action_max))  # Calcul de la target, r + GAMMA * Q(s', a', 0)*
         # pdb.set_trace()
 
         with tf.GradientTape() as tape:  # On prépare le calcul du gradient
-            predictions = tf.reduce_max(self.model(batch_states))  # Q(s, a, 0)
+            predictions = tf.dtypes.cast(tf.reduce_max(self.model(batch_states), axis=2), dtype=tf.float32)  # Q(s, a, 0)
             loss = tf.keras.losses.MSE(q_targets, predictions)  # Calcul de l'erreur
 
-        pdb.set_trace()
+        # pdb.set_trace()
         grads = tape.gradient(loss, self.model.trainable_variables)  # Calcul du gradient
         self.optimizer.apply_gradients(zip(grads, self.model.trainable_variables))  # On applique le gradient à notre modèle
 
