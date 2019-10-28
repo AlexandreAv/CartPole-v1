@@ -37,7 +37,7 @@ class Model(tf.keras.Model):
         if random() < eps:  # On ne suit pas la policy et donc on choisit une action aléatoire
             print('ALéatoire')
             action = randrange(OUTPUT_SIZE)  # On choisit une action aléatoire
-            EPISLON = EPISLON * EPISLON_DECAY
+            EPISLON *= EPISLON_DECAY
             return action
         else:
             action = self.predict(state)  # On passe le state dans le réseau de neuronne
@@ -70,6 +70,7 @@ class Memory:
         batch[2] = tf.expand_dims(tf.convert_to_tensor(batch[2], dtype=tf.float64), 1)  # on transforme en tensor et ajoute une dimension la compatibilté des shapes pour les calculs
         batch[3] = tf.expand_dims(tf.convert_to_tensor(batch[3], dtype=tf.float64), 1)  # voir au dessus
         batch[4] = tf.expand_dims(tf.convert_to_tensor(batch[4], dtype=tf.float64), 1)
+        # pdb.set_trace()
 
         return batch
 
@@ -92,7 +93,7 @@ class DQN:
         self.next_state = np.array([[0.0, 0.0, 0.0, 0.0]])  # Etat suivant
         self.metrics_loss = tf.metrics.MeanSquaredError()
 
-    @tf.function
+    # @tf.function
     def train(self, batch_states, batch_next_states, batch_actions, batch_reward, batch_done):
 
         next_action_max = tf.reduce_max(self.model(batch_next_states)) * (1 - batch_done) # Q(s', a', 0)
@@ -103,6 +104,7 @@ class DQN:
             predictions = tf.reduce_max(self.model(batch_states))  # Q(s, a, 0)
             loss = tf.keras.losses.MSE(q_targets, predictions)  # Calcul de l'erreur
 
+        pdb.set_trace()
         grads = tape.gradient(loss, self.model.trainable_variables)  # Calcul du gradient
         self.optimizer.apply_gradients(zip(grads, self.model.trainable_variables))  # On applique le gradient à notre modèle
 
