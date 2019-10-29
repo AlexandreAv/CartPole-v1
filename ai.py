@@ -6,10 +6,10 @@ from random import random, randrange, sample
 
 # tf.debugging.set_log_device_placement(True)
 tf.keras.backend.set_floatx('float64')
-EPISLON = 0.01
-EPISLON_DECAY = 0.95
+EPISLON = 0.1
+EPISLON_DECAY = 1
 GAMMA = 0.95
-LR = 0.005
+LR = 0.0005
 INPUT_SIZE = 4
 OUTPUT_SIZE = 2
 BATCH_SIZE = 32
@@ -30,7 +30,9 @@ class Model(tf.keras.Model):
         x = self.input_layer(x)
         x = self.dense_layer1(x)
         x = self.dense_layer2(x)
-        return self.output_layer(x)
+        x = self.output_layer(x)
+
+        return x
 
     def pick_action(self, state, eps):
         global EPISLON
@@ -87,6 +89,7 @@ class DQN:
     def __init__(self):
         self.model = Model()  # Notre modèle (réseau de neuronne)
         self.optimizer = tf.keras.optimizers.Adam(lr=LR)  # l'optimizer pour la back propagation
+        self.loss_object = tf.keras.losses.MSE
         self.memory = Memory(BATCH_SIZE, MEMORY_MAX)  # Mémoire des actions de l'agent
         self.reward = 0
         self.state = np.array([[0.0, 0.0, 0.0, 0.0]])  # Etat actuelle
@@ -97,15 +100,15 @@ class DQN:
     def train(self, batch_states, batch_next_states, batch_actions, batch_reward, batch_done):
 
         next_action_max = tf.reduce_max(self.model(batch_next_states)) * (1 - batch_done)  # Q(s', a', 0)
-        q_targets = tf.add(batch_reward, tf.scalar_mul(GAMMA, next_action_max))  # Calcul de la target, r + GAMMA * Q(s', a', 0)*
-        # pdb.set_trace()
+        q_targets = tf.squeeze(tf.add(batch_reward, tf.scalar_mul(GAMMA, next_action_max)), axis=1)  # Calcul de la target, r + GAMMA * Q(s', a', 0)*
 
         with tf.GradientTape() as tape:  # On prépare le calcul du gradient
-            predictions = tf.dtypes.cast(tf.reduce_max(self.model(batch_states), axis=2), dtype=tf.float32)  # Q(s, a, 0)
-            loss = tf.keras.losses.MSE(q_targets, predictions)  # Calcul de l'erreur
+            predictions = tf.squeeze(tf.reduce_max(self.model(batch_states), axis=2), axis=1)  # Q(s, a, 0)
+            loss = self.loss_object(q_targets, predictions)  # Calcul de l'erreur
 
         # pdb.set_trace()
         grads = tape.gradient(loss, self.model.trainable_variables)  # Calcul du gradient
+        pdb.set_trace()
         self.optimizer.apply_gradients(zip(grads, self.model.trainable_variables))  # On applique le gradient à notre modèle
 
         self.metrics_loss(q_targets, predictions)

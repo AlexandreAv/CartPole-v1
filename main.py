@@ -11,6 +11,7 @@ for i_episode in range(20000):
     for t in range(500):
         env.render()
         action = AI.select_action(observation, reward, done)
+        print(action)
         observation, reward, done, info = env.step(action)
         if done:
             print("Episode finished after {} timesteps".format(t+1))
