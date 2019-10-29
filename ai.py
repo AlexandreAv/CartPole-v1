@@ -9,7 +9,7 @@ tf.keras.backend.set_floatx('float64')
 EPISLON = 0.1
 EPISLON_DECAY = 1
 GAMMA = 0.95
-LR = 0.0005
+LR = 0.005
 INPUT_SIZE = 4
 OUTPUT_SIZE = 2
 BATCH_SIZE = 32
@@ -37,7 +37,7 @@ class Model(tf.keras.Model):
     def pick_action(self, state, eps):
         global EPISLON
         if random() < eps:  # On ne suit pas la policy et donc on choisit une action aléatoire
-            print('ALéatoire')
+            print('Aléatoire')
             action = randrange(OUTPUT_SIZE)  # On choisit une action aléatoire
             EPISLON *= EPISLON_DECAY
             return action
@@ -69,9 +69,11 @@ class Memory:
 
         batch[0] = tf.convert_to_tensor(batch[0], dtype=tf.float64)  # on transforme en tensor
         batch[1] = tf.convert_to_tensor(batch[1], dtype=tf.float64)  # voir au dessus
+        # batch[0].shape = TensorShape([32, 1, 4]), de même pour batch[1]
         batch[2] = tf.expand_dims(tf.convert_to_tensor(batch[2], dtype=tf.float64), 1)  # on transforme en tensor et ajoute une dimension la compatibilté des shapes pour les calculs
         batch[3] = tf.expand_dims(tf.convert_to_tensor(batch[3], dtype=tf.float64), 1)  # voir au dessus
-        batch[4] = tf.expand_dims(tf.convert_to_tensor(batch[4], dtype=tf.float64), 1)
+        batch[4] = tf.expand_dims(tf.convert_to_tensor(batch[4], dtype=tf.float64), 1)  # voir au dessus
+        # batch[2].shape = TensorShape([32, 1]), de même pour batch[2], batch[3], batch[4]
         # pdb.set_trace()
 
         return batch
@@ -94,6 +96,8 @@ class DQN:
         self.reward = 0
         self.state = np.array([[0.0, 0.0, 0.0, 0.0]])  # Etat actuelle
         self.next_state = np.array([[0.0, 0.0, 0.0, 0.0]])  # Etat suivant
+        self.next_action = 0
+        self.action = 1
         self.metrics_loss = tf.metrics.MeanSquaredError()
 
     # @tf.function
@@ -101,14 +105,17 @@ class DQN:
 
         next_action_max = tf.reduce_max(self.model(batch_next_states)) * (1 - batch_done)  # Q(s', a', 0)
         q_targets = tf.squeeze(tf.add(batch_reward, tf.scalar_mul(GAMMA, next_action_max)), axis=1)  # Calcul de la target, r + GAMMA * Q(s', a', 0)*
+        # q_targets.shape = TensorShape([32])
 
         with tf.GradientTape() as tape:  # On prépare le calcul du gradient
             predictions = tf.squeeze(tf.reduce_max(self.model(batch_states), axis=2), axis=1)  # Q(s, a, 0)
+            # predictions.shape = TensorShape([32])
             loss = self.loss_object(q_targets, predictions)  # Calcul de l'erreur
+            # loss.shape = shape=()
 
         # pdb.set_trace()
         grads = tape.gradient(loss, self.model.trainable_variables)  # Calcul du gradient
-        pdb.set_trace()
+        # pdb.set_trace()
         self.optimizer.apply_gradients(zip(grads, self.model.trainable_variables))  # On applique le gradient à notre modèle
 
         self.metrics_loss(q_targets, predictions)
@@ -116,16 +123,17 @@ class DQN:
     def select_action(self, signals, reward, done):
         self.state = self.next_state  # On récupère l'état actuelle
         self.next_state = np.array([signals])  # On récupère le nouvelle état
-        action = self.model.pick_action(self.next_state, EPISLON)  # On choisit une action
+        self.action = self.next_action
+        self.next_action = self.model.pick_action(self.next_state, EPISLON)  # On choisit une action
 
-        self.memory.add(self.state, self.next_state, action, reward, done)  # On ajoute une transition à la mémoire
+        self.memory.add(self.state, self.next_state, self.action, reward, done)  # On ajoute une transition à la mémoire
 
         if self.memory.is_enough_data():  # On entraine notre modèle si il y a assez de données
             batch_states, batch_next_states, batch_actions, batch_reward, batch_done = self.memory.get_sample()  # On récupère notre lot de données
             self.train(batch_states, batch_next_states, batch_actions, batch_reward, batch_done)
-            print('------------------------------------------')
+
             print("la moyenne des erreurs est de %s" % self.metrics_loss.result())  # On affiche la moyenne des erreurs non cumulées
             print("le reward est de %s" % self.memory.last_reward())  # On affiche le dernier rewarc
             print('------------------------------------------')
 
-        return action
+        return self.next_action
