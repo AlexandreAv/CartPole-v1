@@ -4,11 +4,11 @@ from ai import DQN
 AI = DQN()
 
 env = gym.make('CartPole-v1')
-for i_episode in range(20000):
+for i_episode in range(20):
     observation = env.reset()
     reward = 0
     done = False
-    for t in range(500):
+    for t in range(100):
         env.render()
         action = AI.select_action(observation, reward, done)
         observation, reward, done, info = env.step(action)

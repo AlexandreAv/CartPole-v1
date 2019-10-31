@@ -63,17 +63,11 @@ class Memory:
     def get_sample(self):
         batch = list(zip(*sample(self.storage, self.batch_size)))  # On regroupe les éléments en liste de state, liste de next_state, liste d'action et liste de reward
 
-        for i1 in range(1):  # Boucle de suppression d'une dimension inutile
-            for i2 in range(len(batch[i1]) - 1):
-                np.squeeze(batch[i1][i2], axis=0)  # Suppresion de la dimension, données sous la forme
-
         batch[0] = tf.convert_to_tensor(batch[0], dtype=tf.float64)  # on transforme en tensor
         batch[1] = tf.convert_to_tensor(batch[1], dtype=tf.float64)  # voir au dessus
-        # batch[0].shape = TensorShape([32, 1, 4]), de même pour batch[1]
         batch[2] = tf.expand_dims(tf.convert_to_tensor(batch[2], dtype=tf.float64), 1)  # on transforme en tensor et ajoute une dimension la compatibilté des shapes pour les calculs
         batch[3] = tf.expand_dims(tf.convert_to_tensor(batch[3], dtype=tf.float64), 1)  # voir au dessus
         batch[4] = tf.expand_dims(tf.convert_to_tensor(batch[4], dtype=tf.float64), 1)  # voir au dessus
-        # batch[2].shape = TensorShape([32, 1]), de même pour batch[2], batch[3], batch[4]
         # pdb.set_trace()
 
         return batch
@@ -91,27 +85,26 @@ class DQN:
     def __init__(self):
         self.model = Model()  # Notre modèle (réseau de neuronne)
         self.optimizer = tf.keras.optimizers.Adam(lr=LR)  # l'optimizer pour la back propagation
-        self.loss_object = tf.keras.losses.MSE
+        self.loss_object = tf.keras.losses.MeanSquaredError()
         self.memory = Memory(BATCH_SIZE, MEMORY_MAX)  # Mémoire des actions de l'agent
-        self.reward = 0
-        self.state = np.array([[0.0, 0.0, 0.0, 0.0]])  # Etat actuelle
+        self.last_state = np.array([[0.0, 0.0, 0.0, 0.0]])  # Etat actuelle
         self.next_state = np.array([[0.0, 0.0, 0.0, 0.0]])  # Etat suivant
         self.next_action = 0
-        self.action = 1
+        self.last_action = 1
+        self.last_reward = 0
+        self.last_done = False
+        self.counter = 0
         self.metrics_loss = tf.metrics.MeanSquaredError()
 
-    # @tf.function
+    @tf.function
     def train(self, batch_states, batch_next_states, batch_actions, batch_reward, batch_done):
 
-        next_action_max = tf.reduce_max(self.model(batch_next_states)) * (1 - batch_done)  # Q(s', a', 0)
-        q_targets = tf.squeeze(tf.add(batch_reward, tf.scalar_mul(GAMMA, next_action_max)), axis=1)  # Calcul de la target, r + GAMMA * Q(s', a', 0)*
-        # q_targets.shape = TensorShape([32])
+        next_action_max = tf.expand_dims(tf.reduce_max(self.model(batch_next_states), axis=2), axis=1)  # Q(s', a', 0)
+        q_targets = tf.expand_dims(tf.add(batch_reward, tf.scalar_mul(GAMMA, next_action_max)) * (1 - batch_done), axis=1)  # Calcul de la target, r + GAMMA * Q(s', a', 0)*
 
         with tf.GradientTape() as tape:  # On prépare le calcul du gradient
-            predictions = tf.squeeze(tf.reduce_max(self.model(batch_states), axis=2), axis=1)  # Q(s, a, 0)
-            # predictions.shape = TensorShape([32])
+            predictions = tf.expand_dims(self.model(batch_states), axis=1)  # Q(s, a, 0)
             loss = self.loss_object(q_targets, predictions)  # Calcul de l'erreur
-            # loss.shape = shape=()
 
         # pdb.set_trace()
         grads = tape.gradient(loss, self.model.trainable_variables)  # Calcul du gradient
@@ -121,19 +114,25 @@ class DQN:
         self.metrics_loss(q_targets, predictions)
 
     def select_action(self, signals, reward, done):
-        self.state = self.next_state  # On récupère l'état actuelle
-        self.next_state = np.array([signals])  # On récupère le nouvelle état
-        self.action = self.next_action
-        self.next_action = self.model.pick_action(self.next_state, EPISLON)  # On choisit une action
+        next_state = signals.reshape(1, 4)
 
-        self.memory.add(self.state, self.next_state, self.action, reward, done)  # On ajoute une transition à la mémoire
+        self.next_action = self.model.pick_action(next_state, EPISLON)  # On choisit une action
 
-        if self.memory.is_enough_data():  # On entraine notre modèle si il y a assez de données
+        self.memory.add(self.last_state, self.next_state, self.last_action, self.last_reward, done)  # On ajoute une transition à la mémoire
+
+        if self.memory.is_enough_data() and self.counter > 30:  # On entraine notre modèle si il y a assez de données
             batch_states, batch_next_states, batch_actions, batch_reward, batch_done = self.memory.get_sample()  # On récupère notre lot de données
             self.train(batch_states, batch_next_states, batch_actions, batch_reward, batch_done)
 
             print("la moyenne des erreurs est de %s" % self.metrics_loss.result())  # On affiche la moyenne des erreurs non cumulées
             print("le reward est de %s" % self.memory.last_reward())  # On affiche le dernier rewarc
             print('------------------------------------------')
+
+        self.last_state = self.next_state  # On récupère l'état actuelle
+        self.next_state = next_state  # On récupère le nouvelle état
+        self.last_action = self.next_action
+        self.last_reward = reward
+        self.last_done = done
+        self.counter += 1
 
         return self.next_action
